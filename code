@@ -1,0 +1,891 @@
+
+#include <Arduino.h>
+#include <ESP8266WiFi.h>
+#include <LittleFS.h>
+#include <ArduinoOTA.h>
+#include "ESP8266FtpServer.h"
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <string>
+#include <ESPAsyncWebServer.h>
+
+#define ONE_WIRE_BUS_1 D3
+#define ONE_WIRE_BUS_2 A0
+#define ONE_WIRE_BUS_3 D4
+
+// Création des objets pour accéder au bus '1-Wire' et plus spécifiquement au capteur sur ce bus ('Dallas' est le nom du constructeur du ds12b80)
+// On peut avoir plusieurs capteurs sur le même bus et l'objet 'sensors' permet de tous les lire.
+OneWire oneWire1(ONE_WIRE_BUS_1);
+OneWire oneWire2(ONE_WIRE_BUS_2);
+OneWire oneWire3(ONE_WIRE_BUS_3);
+DallasTemperature sensors1(&oneWire1);
+DallasTemperature sensors2(&oneWire2);
+DallasTemperature sensors3(&oneWire3);
+const char* ssid = "CARPEDIEM";
+const char* password = "happyredbull";
+const char* OTA_user = "OTA";
+const char* OTA_password = "OTA";
+
+String Sonde_A1;
+String Ref_Sonde_A1;
+String Sonde_A2;
+String Ref_Sonde_A2;
+String Sonde_A3;
+String Ref_Sonde_A3;
+String Sonde_A4;
+String Ref_Sonde_A4;
+String Sonde_A5;
+String Ref_Sonde_A5;
+String Sonde_A6;
+String Ref_Sonde_A6;
+String Sonde_A7;
+String Ref_Sonde_A7;
+String Sonde_A8;
+String Ref_Sonde_A8;
+
+String Sonde_B1;
+String Ref_Sonde_B1;
+String Sonde_B2;
+String Ref_Sonde_B2;
+String Sonde_B3;
+String Ref_Sonde_B3;
+String Sonde_B4;
+String Ref_Sonde_B4;
+String Sonde_B5;
+String Ref_Sonde_B5;
+String Sonde_B6;
+String Ref_Sonde_B6;
+String Sonde_B7;
+String Ref_Sonde_B7;
+String Sonde_B8;
+String Ref_Sonde_B8;
+
+String Sonde_C1;
+String Ref_Sonde_C1;
+String Sonde_C2;
+String Ref_Sonde_C2;
+String Sonde_C3;
+String Ref_Sonde_C3;
+String Sonde_C4;
+String Ref_Sonde_C4;
+String Sonde_C5;
+String Ref_Sonde_C5;
+String Sonde_C6;
+String Ref_Sonde_C6;
+String Sonde_C7;
+String Ref_Sonde_C7;
+String Sonde_C8;
+String Ref_Sonde_C8;
+
+
+
+
+//String capteurLuminosite ="coucou" ;
+//declaration Variable
+char hexAddrText[17];
+const long nsensor = 0;
+float temp1;
+float temp2;
+float temp3;
+String  page ="";
+//FtpServer ftpSrv;  
+
+
+AsyncWebServer server(80);
+// Variable to store the HTTP request
+String header;
+String headingtext;
+
+// Current time
+unsigned long currentTime = millis();
+
+// Previous time
+unsigned long previousTime = 0; 
+
+// Define timeout time in milliseconds (example: 2000ms = 2s)
+const long timeoutTime = 5000;
+
+// Create variables to hold the device addresses
+int num_sensors1;
+int num_sensors2;
+int num_sensors3;
+DeviceAddress addresses [8];
+
+void printAddress(DeviceAddress deviceAddress){
+  for (uint8_t i = 0; i < 8; i++){
+    // zero pad the address if necessary
+    if (deviceAddress[i] < 16) Serial.print("0");
+   }
+  sprintf(hexAddrText,"%X:%X:%X:%X:%X:%X:%X:%X", deviceAddress[0], deviceAddress[1],deviceAddress[2],deviceAddress[3],deviceAddress[4],deviceAddress[5],deviceAddress[6],deviceAddress[7]);
+  
+}
+
+
+
+//***************************************************************************
+//***************************************************************************
+
+
+
+void connectToWiFi() {
+  Serial.printf("Connecting to '%s'\n", ssid);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  if (WiFi.waitForConnectResult() == WL_CONNECTED) {
+    Serial.print("Connected. IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("Connection Failed!");
+  }
+}
+
+void setUpOverTheAirProgramming() {
+  ArduinoOTA.setPort(8266);
+  ArduinoOTA.setHostname(OTA_user);
+  ArduinoOTA.setPassword(OTA_password);
+  ArduinoOTA.begin();
+}
+bool loadFromSpiffs(String path){
+  String dataType = "text/plain";
+  if(path.endsWith("/")) path += "index.html";
+
+  if(path.endsWith(".src")) path = path.substring(0, path.lastIndexOf("."));
+  else if(path.endsWith(".html")) dataType = "text/html";
+  else if(path.endsWith(".htm")) dataType = "text/html";
+  else if(path.endsWith(".css")) dataType = "text/css";
+  else if(path.endsWith(".js")) dataType = "application/javascript";
+  else if(path.endsWith(".png")) dataType = "image/png";
+  else if(path.endsWith(".gif")) dataType = "image/gif";
+  else if(path.endsWith(".jpg")) dataType = "image/jpeg";
+  else if(path.endsWith(".ico")) dataType = "image/x-icon";
+  else if(path.endsWith(".xml")) dataType = "text/xml";
+  else if(path.endsWith(".pdf")) dataType = "application/pdf";
+  else if(path.endsWith(".zip")) dataType = "application/zip";
+  File dataFile = LittleFS.open(path.c_str(), "r");
+  //if (server.hasArg("download")) dataType = "application/octet-stream";
+ // if (server.streamFile(dataFile, dataType) != dataFile.size()) {
+  //}
+
+  dataFile.close();
+  return true;
+}
+
+
+
+
+
+
+//********************************************************************
+//                     identification des capteur
+//********************************************************************
+// function to print a device address
+void data(){
+//*********************************************************************
+   Serial.println("data");
+//boucle des capteur
+
+
+
+  //---------------------------sensors
+  // Initialisation du capteur
+	sensors1.begin(); 
+   sensors2.begin(); 
+   sensors3.begin();
+  //Setup capteur
+	num_sensors1 = sensors1.getDeviceCount();
+	num_sensors2 = sensors2.getDeviceCount();
+	num_sensors3 = sensors3.getDeviceCount();
+
+sensors1.requestTemperatures(); 
+sensors2.requestTemperatures(); 
+sensors3.requestTemperatures(); 
+
+
+    for (int i = 0; i < num_sensors1; i++) {
+		// Read its address
+		sensors1.getAddress(addresses[i], i);
+    
+		// Instruct it to use 12 bit precision, which is the maximum.
+		// Other choices are 9, 10, 11 and 12.
+		sensors1.setResolution(addresses[i], 12);
+    }
+
+        for (int i = 0; i < num_sensors2; i++) {
+		// Read its address
+		sensors2.getAddress(addresses[i], i);
+    
+		// Instruct it to use 12 bit precision, which is the maximum.
+		// Other choices are 9, 10, 11 and 12.
+		sensors2.setResolution(addresses[i], 12);
+    }   
+        for (int i = 0; i < num_sensors3; i++) {
+		// Read its address
+		sensors3.getAddress(addresses[i], i);
+    
+		// Instruct it to use 12 bit precision, which is the maximum.
+		// Other choices are 9, 10, 11 and 12.
+		sensors3.setResolution(addresses[i], 12);
+    }  
+
+
+
+           // int compteur = 0;
+						//Boucle de des sondes
+						int nsensor = 0;
+						while ( nsensor < 8 ) {
+              									
+              temp1 =sensors1.getTempCByIndex(nsensor);
+
+
+
+
+							char buffer1[30];
+
+							dtostrf(temp1, 6, 2, buffer1);
+
+							//Serial.println(temp);
+							 String str = buffer1;
+
+							// Web Page Heading
+							//client.println(headingtext);
+
+							sensors1.getAddress(addresses[nsensor], nsensor);
+							sensors1.setResolution(addresses[nsensor], 12);
+
+							printAddress(addresses[nsensor]);
+           
+							 String str2 = hexAddrText;
+              int nsonde = nsensor + 1;
+              String nsonde_final = "Sonde_A" + String(nsonde) ;
+
+              Serial.println(str);
+              Serial.println(str2);
+              Serial.println(nsonde_final);
+              if ( str == "-127.00"){
+
+              str2 = "inconnue";
+
+
+              }; 
+               
+              switch (nsonde) {
+              case 1:
+              Sonde_A1 = str;
+              Ref_Sonde_A1 = str2;
+              case 2:
+              Sonde_A2 = str;
+              Ref_Sonde_A2 = str2;
+              case 3:
+              Sonde_A3 = str;
+              Ref_Sonde_A3 = str2;
+              case 4:
+              Sonde_A4 = str;
+              Ref_Sonde_A4 = str2;
+              case 5:
+              Sonde_A5 = str;
+              Ref_Sonde_A5 = str2;
+              case 6:
+              Sonde_A6 = str;
+              Ref_Sonde_A6 = str2;
+              case 7:
+              Sonde_A7 = str;
+              Ref_Sonde_A7 = str2;
+              case 8:
+              Sonde_A8 = str;
+              Ref_Sonde_A8 = str2;
+              default:
+                  Serial.println(nsonde);         
+              }
+							nsensor ++;
+						};
+
+delay(1000);	
+  nsensor = 0;
+  Serial.println(nsensor);
+						while ( nsensor < 8 ) {
+              			delay(100);							
+              temp1 =sensors2.getTempCByIndex(nsensor);
+
+
+
+
+							char buffer1[30];
+
+							dtostrf(temp1, 6, 2, buffer1);
+
+							//Serial.println(temp);
+							 String str = buffer1;
+
+							// Web Page Heading
+							//client.println(headingtext);
+
+							sensors2.getAddress(addresses[nsensor], nsensor);
+							sensors2.setResolution(addresses[nsensor], 12);
+
+							printAddress(addresses[nsensor]);
+           
+							 String str2 = hexAddrText;
+              int nsonde = nsensor + 1;
+              String nsonde_final = "Sonde_B" + String(nsonde) ;
+
+              Serial.println(str);
+              Serial.println(str2);
+              Serial.println(nsonde_final);
+              if ( str == "-127.00"){
+
+              str2 = "inconnue";
+
+
+              }; 
+
+              switch (nsonde) {
+              case 1:
+              Sonde_B1 = str;
+              Ref_Sonde_B1 = str2;
+              case 2:
+              Sonde_B2 = str;
+              Ref_Sonde_B2 = str2;
+              case 3:
+              Sonde_B3 = str;
+              Ref_Sonde_B3 = str2;
+              case 4:
+              Sonde_B4 = str;
+              Ref_Sonde_B4 = str2;
+              case 5:
+              Sonde_B5 = str;
+              Ref_Sonde_B5 = str2;
+              case 6:
+              Sonde_B6 = str;
+              Ref_Sonde_B6 = str2;
+              case 7:
+              Sonde_B7 = str;
+              Ref_Sonde_B7 = str2;
+              case 8:
+              Sonde_B8 = str;
+              Ref_Sonde_B8 = str2;
+              default:
+                  Serial.println(nsonde);         
+              };
+							nsensor ++;
+						};
+ 
+// int compteur = 0;
+						//Boucle de des sondes
+						 nsensor = 0;
+						while ( nsensor < 8 ) {
+              			delay(100);	
+                     			Serial.println(nsensor);
+              temp1 =sensors3.getTempCByIndex(nsensor);
+
+
+
+
+							char buffer1[30];
+
+							dtostrf(temp1, 6, 2, buffer1);
+
+							//Serial.println(temp);
+							 String str = buffer1;
+
+							// Web Page Heading
+							//client.println(headingtext);
+                     Serial.println(nsensor);
+             
+							sensors3.getAddress(addresses[nsensor], nsensor);
+							sensors3.setResolution(addresses[nsensor], 12);
+
+							printAddress(addresses[nsensor]);
+            
+							 String str2 = hexAddrText;
+              int nsonde = nsensor + 1;
+              Serial.println(nsonde);
+              String nsonde_final = "Sonde_C" + String(nsonde);
+
+              Serial.println(str);
+              Serial.println(str2);
+              Serial.println(nsonde_final);
+              if ( str == "-127.00"){
+
+              str2 = "inconnue";
+
+
+              }; 
+               Serial.println(nsonde);
+              switch (nsonde) {
+              case 1:
+              Sonde_C1 = str;
+              Ref_Sonde_C1 = str2;
+              case 2:              
+              Sonde_C2 = str;
+              Ref_Sonde_C2 = str2;
+              case 3:
+              Sonde_C3 = str;
+              Ref_Sonde_C3 = str2;
+              case 4:
+              Sonde_C4 = str;
+              Ref_Sonde_C4 = str2;
+              case 5:
+              Sonde_C5 = str;
+              Ref_Sonde_C5 = str2;
+              case 6:
+              Sonde_C6 = str;
+              Ref_Sonde_C6 = str2;
+              case 7:
+              Sonde_C7 = str;
+              Ref_Sonde_C7 = str2;
+              case 8:
+              Sonde_C8 = str;
+              Ref_Sonde_C8 = str2;
+                          
+        
+              }
+              Serial.println("fin boucle"); 
+							nsensor ++;
+						};
+
+
+
+
+ 
+
+}
+/********************************/
+
+void setup() {
+   Serial.begin(115200);
+
+  //--------------------------serial
+ 	Serial.println("setup");
+  Serial.begin(115200);
+	Serial.println("\n");
+  
+
+
+ data(); 
+  //----------------------------wifi
+  connectToWiFi();
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  //ftp
+ //* ftpSrv.begin(ftp_user, ftp_password);
+
+  //-----------------------------OTA
+  setUpOverTheAirProgramming();
+
+//-----------------------------little fs
+    LittleFS.begin();
+
+    File file = LittleFS.open("index.html", "r");
+
+File root = LittleFS.open("/", "r");
+File file2 = root.openNextFile();
+    while (file2)
+    {
+      Serial.print("File: ");
+      Serial.println(file2.name());
+      file2.close();
+      file2 = root.openNextFile();
+    }
+
+
+   
+//----------------------------------webserver
+Serial.println("HTTP server started");
+server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+{
+request->send(LittleFS, "/index.html", "text/html");
+});
+server.on("/photo.jpg", HTTP_GET, [](AsyncWebServerRequest *request)
+{
+request->send(LittleFS, "/photo.jpg", "image/jpeg");
+});
+
+server.on("/schema.jpg", HTTP_GET, [](AsyncWebServerRequest *request)
+{
+request->send(LittleFS, "/schema.jpg", "image/jpeg");
+});
+server.on("/index.css", HTTP_GET, [](AsyncWebServerRequest *request)
+{
+request->send(LittleFS, "/index.css", "text/css");
+});
+  server.on("/script.js", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    request->send(LittleFS, "/script.js", "text/javascript");
+  }); 
+  
+  server.on("/Sonde_A1", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_A1);
+  }); 
+   
+ server.on("/Sonde_A2", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_A2);
+  }); 
+
+ server.on("/Sonde_A3", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_A3);
+  }); 
+
+
+ server.on("/Sonde_A4", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_A4);
+  }); 
+
+ server.on("/Sonde_A5", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_A5);
+  }); 
+
+ server.on("/Sonde_A6", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_A6);
+  }); 
+
+ server.on("/Sonde_A7", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_A7);
+  }); 
+
+ server.on("/Sonde_A8", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_A8);
+  }); 
+
+
+  server.on("/Ref_Sonde_A1", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_A1);
+  }); 
+   
+ server.on("/Ref_Sonde_A2", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_A2);
+  }); 
+
+ server.on("/Ref_Sonde_A3", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_A3);
+  }); 
+
+
+ server.on("/Ref_Sonde_A4", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_A4);
+  }); 
+
+ server.on("/Ref_Sonde_A5", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_A5);
+  }); 
+
+ server.on("/Ref_Sonde_A6", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_A6);
+  }); 
+
+ server.on("/Ref_Sonde_A7", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_A7);
+  }); 
+
+ server.on("/Ref_Sonde_A8", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_A8);
+  }); 
+
+
+server.on("/Sonde_B1", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_B1);
+  }); 
+   
+ server.on("/Sonde_B2", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_B2);
+  }); 
+
+ server.on("/Sonde_B3", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_B3);
+  }); 
+
+
+ server.on("/Sonde_B4", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_B4);
+  }); 
+
+ server.on("/Sonde_B5", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_B5);
+  }); 
+
+ server.on("/Sonde_B6", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_B6);
+  }); 
+
+ server.on("/Sonde_B7", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_B7);
+  }); 
+
+ server.on("/Sonde_B8", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_B8);
+  }); 
+
+
+  server.on("/Ref_Sonde_B1", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_B1);
+  }); 
+   
+ server.on("/Ref_Sonde_B2", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_B2);
+  }); 
+
+ server.on("/Ref_Sonde_B3", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_B3);
+  }); 
+
+
+ server.on("/Ref_Sonde_B4", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_B4);
+  }); 
+
+ server.on("/Ref_Sonde_B5", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_B5);
+  }); 
+
+ server.on("/Ref_Sonde_B6", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_B6);
+  }); 
+
+ server.on("/Ref_Sonde_B7", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_B7);
+  }); 
+
+ server.on("/Ref_Sonde_B8", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_B8);
+  }); 
+
+server.on("/Sonde_C1", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_C1);
+  }); 
+   
+ server.on("/Sonde_C2", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+      Serial.println("Traitement des requettes"); 
+     request->send(200, "text/plain", Sonde_C2);
+      Serial.println("Fin Traitement des requettes"); 
+  }); 
+
+ server.on("/Sonde_C3", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_C3);
+  }); 
+
+
+ server.on("/Sonde_C4", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_C4);
+  }); 
+
+ server.on("/Sonde_C5", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_C5);
+  }); 
+
+ server.on("/Sonde_C6", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_C6);
+  }); 
+
+ server.on("/Sonde_C7", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_C7);
+  }); 
+
+ server.on("/Sonde_C8", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Sonde_C8);
+  }); 
+
+
+  server.on("/Ref_Sonde_C1", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_C1);
+  }); 
+   
+ server.on("/Ref_Sonde_C2", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_C2);
+  }); 
+
+ server.on("/Ref_Sonde_C3", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_C3);
+  }); 
+
+
+ server.on("/Ref_Sonde_C4", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_C4);
+  }); 
+
+ server.on("/Ref_Sonde_C5", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_C5);
+  }); 
+
+ server.on("/Ref_Sonde_C6", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_C6);
+  }); 
+
+ server.on("/Ref_Sonde_C7", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_C7);
+  }); 
+
+ server.on("/Ref_Sonde_C8", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+     request->send(200, "text/plain", Ref_Sonde_C8);
+  }); 
+
+
+
+server.begin();
+Serial.println("serveur actif");
+    previousTime = currentTime;
+
+
+
+}
+
+void loop() {
+  
+
+
+		// make a String to hold incoming data from the client		
+		//String currentLine = "";                
+		currentTime = millis();
+		//
+   
+		// loop while the client's connected
+	while (millis() - previousTime >= timeoutTime) { 
+      Serial.println("loop");
+Serial.println(millis());
+Serial.println(currentTime);
+Serial.println(previousTime);
+Serial.println(timeoutTime);
+			// temps au demarrage de la boucle
+			previousTime = millis() ;  
+ data();
+
+     
+    //   ArduinoOTA.handle();
+    //    LittleFS.end(); 
+    /* }
+
+
+
+
+
+
+
+
+    Serial.println(pzem1.readAddress(), HEX);
+
+
+
+
+
+
+
+   // Read the data from the sensor
+    float voltage = pzem1.voltage();
+    float current = pzem1.current();
+    float power = pzem1.power();
+    float energy = pzem1.energy();
+    float frequency = pzem1.frequency();
+    float pf = pzem1.pf();
+
+    // Check if the data is valid
+    if(isnan(voltage)){
+        Serial.println("Error reading voltage");
+    } else if (isnan(current)) {
+        Serial.println("Error reading current");
+    } else if (isnan(power)) {
+        Serial.println("Error reading power");
+    } else if (isnan(energy)) {
+        Serial.println("Error reading energy");
+    } else if (isnan(frequency)) {
+        Serial.println("Error reading frequency");
+    } else if (isnan(pf)) {
+        Serial.println("Error reading power factor");
+    } else {
+
+        // Print the values to the Serial console
+        Serial.print("Voltage: ");      Serial.print(voltage);      Serial.println("V");
+        Serial.print("Current: ");      Serial.print(current);      Serial.println("A");
+        Serial.print("Power: ");        Serial.print(power);        Serial.println("W");
+        Serial.print("Energy: ");       Serial.print(energy,3);     Serial.println("kWh");
+        Serial.print("Frequency: ");    Serial.print(frequency, 1); Serial.println("Hz");
+        Serial.print("PF: ");           Serial.println(pf);
+
+    } 
+// Read the data from the sensor
+    float voltage2 = pzem2.voltage();
+    float current2 = pzem2.current();
+    float power2 = pzem2.power();
+    float energy2 = pzem2.energy();
+    float frequency2 = pzem2.frequency();
+    float pf2 = pzem2.pf();
+
+    // Check if the data is valid
+    if(isnan(voltage2)){
+        Serial.println("Error reading voltage");
+    } else if (isnan(current2)) {
+        Serial.println("Error reading current");
+    } else if (isnan(power2)) {
+        Serial.println("Error reading power");
+    } else if (isnan(energy2)) {
+        Serial.println("Error reading energy");
+    } else if (isnan(frequency2)) {
+        Serial.println("Error reading frequency");
+    } else if (isnan(pf2)) {
+        Serial.println("Error reading power factor");
+    } else {
+
+        // Print the values to the Serial console
+        Serial.print("Voltage: ");      Serial.print(voltage2);      Serial.println("V");
+        Serial.print("Current: ");      Serial.print(current2);      Serial.println("A");
+        Serial.print("Power: ");        Serial.print(power2);        Serial.println("W");
+        Serial.print("Energy: ");       Serial.print(energy2,3);     Serial.println("kWh");
+        Serial.print("Frequency: ");    Serial.print(frequency2, 1); Serial.println("Hz");
+        Serial.print("PF: ");           Serial.println(pf2);
+
+    } 
+    Serial.println("fin loop"); */
+   // delay(30000); 
+}
+
+}
+
+
+
